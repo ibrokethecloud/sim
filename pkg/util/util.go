@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
@@ -87,9 +88,8 @@ func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
 					},
 					DNSPolicy: v1.DNSClusterFirst,
 					NodeSelector: map[string]string{
-						"kubernetes.io/role":    "agent",
-						"beta.kubernetes.io/os": "linux",
-						"type":                  "virtual-kubelet",
+						"kubernetes.io/role": "agent",
+						"type":               "virtual-kubelet",
 					},
 					Tolerations: []v1.Toleration{
 						v1.Toleration{
@@ -103,4 +103,42 @@ func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
 		}
 	}
 	return podList, nil
+}
+
+func DefaultPodStatus() *v1.PodStatus {
+	podStatus := &v1.PodStatus{
+		Phase: v1.PodRunning,
+		Conditions: []v1.PodCondition{
+			v1.PodCondition{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			},
+			v1.PodCondition{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+			v1.PodCondition{
+				Type:   v1.PodInitialized,
+				Status: v1.ConditionTrue,
+			},
+			v1.PodCondition{
+				Type:   v1.ContainersReady,
+				Status: v1.ConditionTrue,
+			},
+		},
+		ContainerStatuses: []v1.ContainerStatus{
+			v1.ContainerStatus{
+				Name:         "suportbundle",
+				Ready:        true,
+				RestartCount: 0,
+				State: v1.ContainerState{
+					Running: &v1.ContainerStateRunning{
+						StartedAt: metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+		},
+		StartTime: &metav1.Time{Time: time.Now()},
+	}
+	return podStatus
 }

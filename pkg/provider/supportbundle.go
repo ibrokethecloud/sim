@@ -3,6 +3,7 @@ package supportbundle
 import (
 	"context"
 	"fmt"
+	"github.com/ibrokethecloud/sim/pkg/util"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"io"
@@ -11,9 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 // SupportBundle provider constants
@@ -27,14 +25,16 @@ type Provider struct {
 	nodeName        string
 	operatingSystem string
 	path            string
+	address         string
 }
 
 // NewProvider creates a new Provider
-func NewProvider(rm *manager.ResourceManager, nodeName, operatingSystem, path string) (*Provider, error) {
+func NewProvider(rm *manager.ResourceManager, nodeName, path, address string) (*Provider, error) {
 	p := Provider{}
 	p.nodeName = nodeName
-	p.operatingSystem = operatingSystem
+	p.operatingSystem = "linux"
 	p.path = path
+	p.address = address
 	return &p, nil
 }
 
@@ -65,7 +65,11 @@ func (p *Provider) GetPod(ctx context.Context, namespace, name string) (pod *v1.
 
 // GetContainerLogs retrieves the logs of a container by name from the provider.
 func (p *Provider) GetContainerLogs(ctx context.Context, namespace, podName, containerName string, opts api.ContainerLogOpts) (io.ReadCloser, error) {
-	return ioutil.NopCloser(strings.NewReader("")), nil
+	contents, err := readLogFiles(p.path, namespace, podName)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.NopCloser(contents), nil
 }
 
 // GetPodFullName as defined in the provider context
@@ -80,100 +84,23 @@ func (p *Provider) RunInContainer(ctx context.Context, namespace, name, containe
 
 // GetPodStatus returns the status of a pod by name that is running as a job
 func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
-	podStatus := &v1.PodStatus{
-		Phase: v1.PodRunning,
-	}
-	return podStatus, nil
+	// nothing to be done. Mark everything as running //
+	return util.DefaultPodStatus(), nil
 }
 
 // GetPods returns a list of all pods known to be running in support bundleNode.
 func (p *Provider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	log.Printf("GetPods from path %s\n", p.path)
 
-	podDetails := make(map[string][]string)
-	// logs in support bundle are structured as
-	// bundleRoot/logs
-	// - namespaces/podname/logfile
-	abs, err := filepath.Abs(filepath.Join(p.path, "logs"))
-	if err != nil {
-		return nil, err
-	}
-
-	// populate parent folders in logs
-	err = filepath.Walk(abs, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
-			return err
-		}
-
-		if info.IsDir() {
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return err
-			}
-			parent := filepath.Dir(absPath)
-			if parent == abs {
-				filepath.Join(abs, info.Name())
-				podDetails[filepath.Join(abs, info.Name())] = []string{}
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// populate list of sub directories
-	err = filepath.Walk(abs, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
-			return err
-		}
-
-		if info.IsDir() {
-			parent := filepath.Dir(path)
-			absParent, err := filepath.Abs(parent)
-			if err != nil {
-				return err
-			}
-			if _, ok := podDetails[absParent]; ok {
-				podDetails[absParent] = append(podDetails[absParent], info.Name())
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	log.Println(podDetails)
-	podList := []*v1.Pod{}
-	for parent, values := range podDetails {
-		base := filepath.Base(parent)
-		for _, v := range values {
-			tmpPod := &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      v,
-					Namespace: base,
-				},
-			}
-			podList = append(podList, tmpPod)
-		}
-	}
-	return podList, nil
+	return util.GeneratePodList(p.path)
 }
 
-// Capacity returns a resource list containing the capacity limits set for Nomad.
+// Capacity returns a resource list containing the capacity limits set for virtual-kubelet node.
 func (p *Provider) Capacity(ctx context.Context) v1.ResourceList {
-	// TODO: Use nomad /nodes api to get a list of nodes in the cluster
-	// and then use the read node /node/:node_id endpoint to calculate
-	// the total resources of the cluster to report back to kubernetes.
 	return v1.ResourceList{
 		"cpu":    resource.MustParse("20"),
 		"memory": resource.MustParse("100Gi"),
-		"pods":   resource.MustParse("20"),
+		"pods":   resource.MustParse("200"),
 	}
 }
 
@@ -256,6 +183,12 @@ func (p *Provider) OperatingSystem() string {
 // will be used for Kubernetes.
 func (p *Provider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	// do nothing yet
+	node.Status.Addresses = []v1.NodeAddress{
+		v1.NodeAddress{
+			Type:    v1.NodeInternalIP,
+			Address: p.address,
+		},
+	}
 	node.Status.Capacity = p.Capacity(ctx)
 	node.Status.Conditions = p.NodeConditions(ctx)
 }

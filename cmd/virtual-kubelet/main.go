@@ -38,16 +38,16 @@ func main() {
 	o.Provider = "supportbundle"
 	o.Version = strings.Join([]string{k8sVersion, "vk-supportbundle", buildVersion}, "-")
 	o.PodSyncWorkers = numberOfWorkers
-	o.OperatingSystem = "linux"
 	// additional flags
-	var path string
+	var path, internalAddress string
 	supportBundleFlags := pflag.NewFlagSet("supportBundleFlags", pflag.ExitOnError)
 	supportBundleFlags.StringVar(&path, "path", ".", "path to support bundle")
+	supportBundleFlags.StringVar(&internalAddress, "internal-address", "127.0.0.1", "internal address advertised by kubelet")
 
 	node, err := cli.New(ctx,
 		cli.WithBaseOpts(o),
 		cli.WithProvider("supportbundle", func(cfg provider.InitConfig) (provider.Provider, error) {
-			return supportbundle.NewProvider(cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, path)
+			return supportbundle.NewProvider(cfg.ResourceManager, cfg.NodeName, path, internalAddress)
 		}),
 		// Adds flags and parsing for using logrus as the configured logger
 		cli.WithPersistentFlags(logConfig.FlagSet()),
