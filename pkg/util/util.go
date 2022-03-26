@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -74,19 +75,25 @@ func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
 	for parent, values := range podDetails {
 		base := filepath.Base(parent)
 		for _, v := range values {
+			containers, err := getContainerNames(parent, v)
+			if err != nil {
+				return nil, err
+			}
+			var podContainers []v1.Container
+			for _, c := range containers {
+				podContainers = append(podContainers, v1.Container{
+					Name:  c,
+					Image: "supportbundle",
+				})
+			}
 			tmpPod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      v,
 					Namespace: base,
 				},
 				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						v1.Container{
-							Name:  "supportbundle",
-							Image: "supportbundle", //due to schedule logic nothing will be actually done
-						},
-					},
-					DNSPolicy: v1.DNSClusterFirst,
+					Containers: podContainers,
+					DNSPolicy:  v1.DNSClusterFirst,
 					NodeSelector: map[string]string{
 						"kubernetes.io/role": "agent",
 						"type":               "virtual-kubelet",
@@ -105,40 +112,65 @@ func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
 	return podList, nil
 }
 
-func DefaultPodStatus() *v1.PodStatus {
-	podStatus := &v1.PodStatus{
-		Phase: v1.PodRunning,
-		Conditions: []v1.PodCondition{
-			v1.PodCondition{
-				Type:   v1.PodReady,
-				Status: v1.ConditionTrue,
-			},
-			v1.PodCondition{
-				Type:   v1.PodScheduled,
-				Status: v1.ConditionTrue,
-			},
-			v1.PodCondition{
-				Type:   v1.PodInitialized,
-				Status: v1.ConditionTrue,
-			},
-			v1.PodCondition{
-				Type:   v1.ContainersReady,
-				Status: v1.ConditionTrue,
-			},
+func getContainerNames(namespace, pod string) ([]string, error) {
+	var containers []string
+	err := filepath.Walk(filepath.Join(namespace, pod), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
+			return err
+		}
+
+		if !info.IsDir() {
+			if strings.Contains(info.Name(), ".log") {
+				containers = append(containers, strings.Split(info.Name(), ".log")[0])
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return containers, err
+	}
+
+	return containers, nil
+}
+
+func DefaultPodStatus(pod *v1.Pod) *v1.PodStatus {
+	podStatus := pod.Status.DeepCopy()
+	podStatus.Phase = v1.PodRunning
+	podStatus.StartTime = &metav1.Time{Time: time.Now()}
+	podStatus.Conditions = []v1.PodCondition{
+		v1.PodCondition{
+			Type:   v1.PodReady,
+			Status: v1.ConditionTrue,
 		},
-		ContainerStatuses: []v1.ContainerStatus{
-			v1.ContainerStatus{
-				Name:         "suportbundle",
-				Ready:        true,
-				RestartCount: 0,
-				State: v1.ContainerState{
-					Running: &v1.ContainerStateRunning{
-						StartedAt: metav1.Time{Time: time.Now()},
-					},
+		v1.PodCondition{
+			Type:   v1.PodScheduled,
+			Status: v1.ConditionTrue,
+		},
+		v1.PodCondition{
+			Type:   v1.PodInitialized,
+			Status: v1.ConditionTrue,
+		},
+		v1.PodCondition{
+			Type:   v1.ContainersReady,
+			Status: v1.ConditionTrue,
+		},
+	}
+
+	var cStats []v1.ContainerStatus
+	for _, c := range pod.Spec.Containers {
+		cStats = append(cStats, v1.ContainerStatus{
+			Name:         c.Name,
+			Ready:        true,
+			RestartCount: 0,
+			State: v1.ContainerState{
+				Running: &v1.ContainerStateRunning{
+					StartedAt: metav1.Time{Time: time.Now()},
 				},
 			},
-		},
-		StartTime: &metav1.Time{Time: time.Now()},
+		})
 	}
+
+	podStatus.ContainerStatuses = cStats
 	return podStatus
 }

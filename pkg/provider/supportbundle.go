@@ -11,6 +11,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"log"
 )
 
@@ -26,15 +28,25 @@ type Provider struct {
 	operatingSystem string
 	path            string
 	address         string
+	port            int32
+	config          *rest.Config
+	client          *kubernetes.Clientset
 }
 
 // NewProvider creates a new Provider
-func NewProvider(rm *manager.ResourceManager, nodeName, path, address string) (*Provider, error) {
+func NewProvider(rm *manager.ResourceManager, nodeName, path, address string, port int32, config *rest.Config) (*Provider, error) {
 	p := Provider{}
+	var err error
 	p.nodeName = nodeName
 	p.operatingSystem = "linux"
 	p.path = path
 	p.address = address
+	p.port = port
+	p.config = config
+	p.client, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
 	return &p, nil
 }
 
@@ -60,12 +72,13 @@ func (p *Provider) DeletePod(ctx context.Context, pod *v1.Pod) (err error) {
 // GetPod returns the pod running in the Nomad cluster. returns nil
 // if pod is not found.
 func (p *Provider) GetPod(ctx context.Context, namespace, name string) (pod *v1.Pod, err error) {
-	return pod, nil
+	pod, err = p.client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	return pod, err
 }
 
 // GetContainerLogs retrieves the logs of a container by name from the provider.
 func (p *Provider) GetContainerLogs(ctx context.Context, namespace, podName, containerName string, opts api.ContainerLogOpts) (io.ReadCloser, error) {
-	contents, err := readLogFiles(p.path, namespace, podName)
+	contents, err := readLogFiles(p.path, namespace, podName, containerName)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +98,11 @@ func (p *Provider) RunInContainer(ctx context.Context, namespace, name, containe
 // GetPodStatus returns the status of a pod by name that is running as a job
 func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
 	// nothing to be done. Mark everything as running //
-	return util.DefaultPodStatus(), nil
+	pod, err := p.GetPod(ctx, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+	return util.DefaultPodStatus(pod), nil
 }
 
 // GetPods returns a list of all pods known to be running in support bundleNode.
@@ -187,6 +204,11 @@ func (p *Provider) ConfigureNode(ctx context.Context, node *v1.Node) {
 		v1.NodeAddress{
 			Type:    v1.NodeInternalIP,
 			Address: p.address,
+		},
+	}
+	node.Status.DaemonEndpoints = v1.NodeDaemonEndpoints{
+		KubeletEndpoint: v1.DaemonEndpoint{
+			Port: p.port,
 		},
 	}
 	node.Status.Capacity = p.Capacity(ctx)

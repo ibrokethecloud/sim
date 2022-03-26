@@ -6,6 +6,7 @@ import (
 	"github.com/ibrokethecloud/sim/pkg/setup"
 	"github.com/spf13/pflag"
 	"github.com/virtual-kubelet/node-cli/opts"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"strings"
 
@@ -38,16 +39,18 @@ func main() {
 	o.Provider = "supportbundle"
 	o.Version = strings.Join([]string{k8sVersion, "vk-supportbundle", buildVersion}, "-")
 	o.PodSyncWorkers = numberOfWorkers
+	o.AllowUnauthenticatedClients = true
 	// additional flags
 	var path, internalAddress string
 	supportBundleFlags := pflag.NewFlagSet("supportBundleFlags", pflag.ExitOnError)
 	supportBundleFlags.StringVar(&path, "path", ".", "path to support bundle")
 	supportBundleFlags.StringVar(&internalAddress, "internal-address", "127.0.0.1", "internal address advertised by kubelet")
 
+	var config *rest.Config
 	node, err := cli.New(ctx,
 		cli.WithBaseOpts(o),
 		cli.WithProvider("supportbundle", func(cfg provider.InitConfig) (provider.Provider, error) {
-			return supportbundle.NewProvider(cfg.ResourceManager, cfg.NodeName, path, internalAddress)
+			return supportbundle.NewProvider(cfg.ResourceManager, o.OperatingSystem, path, internalAddress, o.ListenPort, config)
 		}),
 		// Adds flags and parsing for using logrus as the configured logger
 		cli.WithPersistentFlags(logConfig.FlagSet()),
@@ -58,7 +61,7 @@ func main() {
 				return err
 			}
 
-			config, err := clientcmd.BuildConfigFromFlags("", o.KubeConfigPath)
+			config, err = clientcmd.BuildConfigFromFlags("", o.KubeConfigPath)
 			if err != nil {
 				return err
 			}
