@@ -109,7 +109,7 @@ func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v
 func (p *Provider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	log.Printf("GetPods from path %s\n", p.path)
 
-	return util.GeneratePodList(p.path)
+	return util.GeneratePodList(p.path, p.nodeName)
 }
 
 // Capacity returns a resource list containing the capacity limits set for virtual-kubelet node.
@@ -213,4 +213,12 @@ func (p *Provider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	}
 	node.Status.Capacity = p.Capacity(ctx)
 	node.Status.Conditions = p.NodeConditions(ctx)
+	node.Status.NodeInfo.OperatingSystem = "OpenSUSE"
+	node.Status.NodeInfo.OSImage = "OpenSUSE"
+	node.Status.NodeInfo.KernelVersion = "5.x"
+	node.Status.NodeInfo.BootID = "virtual-kubelet"
+	node.Status.NodeInfo.SystemUUID = "virtual-kubelet"
+	node.Status.NodeInfo.ContainerRuntimeVersion = "none"
+	node.Status.NodeInfo.KubeProxyVersion = "none"
+	node.Status.NodeInfo.MachineID = "virtual-kubelet"
 }

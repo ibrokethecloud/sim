@@ -2,6 +2,10 @@ module github.com/ibrokethecloud/sim
 
 go 1.17
 
+replace (
+	github.com/virtual-kubelet/virtual-kubelet => ../../virtual-kubelet/virtual-kubelet
+	github.com/virtual-kubelet/node-cli => ../../virtual-kubelet/node-cli
+)
 require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/virtual-kubelet/node-cli v0.7.0

@@ -66,7 +66,7 @@ func main() {
 				return err
 			}
 
-			return setup.SetupPodObjects(ctx, config, path)
+			return setup.SetupPodObjects(ctx, config, path, o.NodeName)
 		}),
 	)
 

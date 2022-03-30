@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
+func GeneratePodList(bundlePath string, nodeName string) ([]*v1.Pod, error) {
 	podDetails := make(map[string][]string)
 	// logs in support bundle are structured as
 	// bundleRoot/logs
@@ -90,6 +90,9 @@ func GeneratePodList(bundlePath string) ([]*v1.Pod, error) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      v,
 					Namespace: base,
+					Labels: map[string]string{
+						"nodeName": nodeName,
+					},
 				},
 				Spec: v1.PodSpec{
 					Containers: podContainers,

@@ -12,8 +12,8 @@ import (
 
 // SetupPodObjects will parse the support bundle and create pods scheduled to virtual kubelet
 // virtual kubelet will know what to do next...
-func SetupPodObjects(ctx context.Context, config *rest.Config, bundlePath string) error {
-	podList, err := util.GeneratePodList(bundlePath)
+func SetupPodObjects(ctx context.Context, config *rest.Config, bundlePath string, nodeName string) error {
+	podList, err := util.GeneratePodList(bundlePath, nodeName)
 	if err != nil {
 		return err
 	}
