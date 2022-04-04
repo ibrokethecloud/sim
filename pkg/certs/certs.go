@@ -47,7 +47,7 @@ func GenerateCerts(hosts []string, dir string) (*CertInfo, error) {
 	caTemplate := &x509.Certificate{
 		SerialNumber: serialNumber,
 		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(10 * 365 * (24 * time.Hour)),
+		NotAfter:     time.Now().Add(10 * (24 * time.Hour)),
 
 		Subject: pkix.Name{
 			Organization: []string{"kubernetes"},
@@ -62,14 +62,15 @@ func GenerateCerts(hosts []string, dir string) (*CertInfo, error) {
 	etcdServerTemplate := &x509.Certificate{
 		SerialNumber: big.NewInt(0).Add(serialNumber, big.NewInt(1)),
 		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(10 * 365 * (24 * time.Hour)),
+		NotAfter:     time.Now().Add(10 * (24 * time.Hour)),
 
 		Subject: pkix.Name{
-			Organization: []string{"etcd"},
+			Organization: []string{"kubernetes"},
 		},
 
 		SubjectKeyId:          []byte{1, 2, 3, 4, 6},
 		DNSNames:              hosts,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -81,10 +82,9 @@ func GenerateCerts(hosts []string, dir string) (*CertInfo, error) {
 		NotAfter:     time.Now().Add(10 * 365 * (24 * time.Hour)),
 
 		Subject: pkix.Name{
-			Organization: []string{"etcd"},
+			Organization: []string{"kubernetes"},
 			CommonName:   "etcd-client",
 		},
-
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
@@ -99,7 +99,7 @@ func GenerateCerts(hosts []string, dir string) (*CertInfo, error) {
 			Organization: []string{"kubernetes"},
 			CommonName:   "kubernetes",
 		},
-
+		DNSNames:              hosts,
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -146,7 +146,7 @@ func GenerateCerts(hosts []string, dir string) (*CertInfo, error) {
 			Organization: []string{"system:nodes"},
 			CommonName:   "system:nodes:virtual-kubelet",
 		},
-
+		DNSNames:              hosts,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,

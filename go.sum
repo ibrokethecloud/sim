@@ -1294,8 +1294,6 @@ k8s.io/kube-scheduler v0.23.5/go.mod h1:IJGf4WngeoAHLj4ms4n3Poa29ttmaxCXxIqpgU0k
 k8s.io/kubectl v0.23.5/go.mod h1:lLgw7cVY8xbd7o637vOXPca/w6HC205KsPCRDYRCxwE=
 k8s.io/kubelet v0.23.5 h1:eCGJ7olStiyF7TYHlUTjpXg2ltw7Bs9OPZcch8HP2Go=
 k8s.io/kubelet v0.23.5/go.mod h1:M0aj0gaX+rOaGfCfqkV6P7QbwtMwqbL6RdwviHmnehU=
-k8s.io/kubernetes v1.23.5 h1:bxpSv2BKc2MqYRfyqQqLVdodLZ2r+NZ/rEdZXyUAvug=
-k8s.io/kubernetes v1.23.5/go.mod h1:avI3LUTUYZugxwh52KMVM7v9ZjB5gYJ6D3FIoZ1SHUo=
 k8s.io/legacy-cloud-providers v0.23.5 h1:Oq0Kb/YY6qaXwdRXvlPWWtz5i6mJ62X98nuoKHfSHR8=
 k8s.io/legacy-cloud-providers v0.23.5/go.mod h1:IENlwY686f1fbakotgNf7gAQuIyCvOUIAXkPPPE/7KU=
 k8s.io/metrics v0.23.5/go.mod h1:WNAtV2a5BYbmDS8+7jSqYYV6E3efuGTpIwJ8PTD1wgs=

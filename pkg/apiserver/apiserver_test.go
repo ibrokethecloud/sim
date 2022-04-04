@@ -5,6 +5,7 @@ import (
 	"github.com/ibrokethecloud/sim/pkg/certs"
 	"github.com/ibrokethecloud/sim/pkg/etcd"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 func TestRunAPIServer(t *testing.T) {
 
 	dir, err := ioutil.TempDir("/tmp", "apiserver-")
+	defer os.RemoveAll(dir)
 	if err != nil {
 		t.Fatalf("error setting up temp directory for apiserver %v", err)
 	}
@@ -22,13 +24,13 @@ func TestRunAPIServer(t *testing.T) {
 
 	a := APIServerConfig{}
 
-	generatedCerts, err := certs.GenerateCerts([]string{"localhost"}, dir)
+	generatedCerts, err := certs.GenerateCerts([]string{"localhost", "127.0.0.1"}, dir)
 	if err != nil {
 		t.Fatalf("error generating certificates for sim %v", err)
 	}
 	a.Certs = generatedCerts
 
-	etcdConfig, err := etcd.RunEmbeddedEtcd(ctx, filepath.Join(dir), generatedCerts)
+	etcdConfig, err := etcd.RunEmbeddedEtcd(ctx, filepath.Join(dir), a.Certs)
 	if err != nil {
 		t.Fatalf("error setting up embedded etcdserver")
 	}
@@ -41,6 +43,6 @@ func TestRunAPIServer(t *testing.T) {
 
 	err = a.RunAPIServer()
 	if err != nil {
-		t.Fatalf("error running API Server")
+		t.Fatalf("error running API Server %v", err)
 	}
 }

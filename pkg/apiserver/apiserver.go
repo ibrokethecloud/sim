@@ -1,12 +1,9 @@
 package apiserver
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"github.com/ibrokethecloud/sim/pkg/certs"
 	"github.com/ibrokethecloud/sim/pkg/etcd"
-	"io/fs"
 	"io/ioutil"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -31,13 +28,28 @@ const (
 // Run APIServer will boot strap an API server with only core resources enabled
 // No additional controllers will be scheduled
 func (a *APIServerConfig) RunAPIServer() error {
-	flags, err := a.generateFlags()
-	if err != nil {
-		return err
-	}
-
 	apiServer := app.NewAPIServerCommand()
-	apiServer.SetArgs(flags)
+
+	//set flag values
+	apiServer.Flags().Set("tls-cert-file", a.Certs.APICert)
+	apiServer.Flags().Set("tls-private-key-file", a.Certs.APICert)
+	apiServer.Flags().Set("client-ca-file", a.Certs.CACert)
+	apiServer.Flags().Set("service-account-key-file", a.Certs.ServiceAccountCert)
+	apiServer.Flags().Set("service-account-signing-key-file", a.Certs.ServiceAccountCertKey)
+	apiServer.Flags().Set("service-account-issuer", "https://localhost:6443")
+	apiServer.Flags().Set("tls-cert-file", a.Certs.APICert)
+	apiServer.Flags().Set("tls-private-key-file", a.Certs.APICertKey)
+	apiServer.Flags().Set("runtime-config", APIVersionsSupported)
+	apiServer.Flags().Set("enable-priority-and-fairness", "false")
+
+	etcdList := strings.Join(a.Etcd.Endpoints, ",")
+	apiServer.Flags().Set("etcd-servers", etcdList)
+
+	if a.Etcd.TLS != nil {
+		apiServer.Flags().Set("etcd-cafile", a.Certs.CACert)
+		apiServer.Flags().Set("etcd-certfile", a.Certs.EtcdClientCert)
+		apiServer.Flags().Set("etcd-keyfile", a.Certs.EtcdClientCertKey)
+	}
 
 	return cli.RunNoErrOutput(apiServer)
 }
@@ -75,61 +87,42 @@ func (a *APIServerConfig) GenerateKubeConfig(path string) error {
 	if err != nil {
 		return fmt.Errorf("error read ca cert %v", err)
 	}
-	caCert := base64.StdEncoding.EncodeToString(caCertByte)
 
 	adminCertByte, err := ioutil.ReadFile(a.Certs.AdminCert)
 	if err != nil {
 		return fmt.Errorf("error read admin cert %v", err)
 	}
-	adminCert := base64.StdEncoding.EncodeToString(adminCertByte)
 
-	adminCertKeyBte, err := ioutil.ReadFile(a.Certs.AdminCertKey)
+	adminCertKeyByte, err := ioutil.ReadFile(a.Certs.AdminCertKey)
 	if err != nil {
 		return fmt.Errorf("error read admin cert key %v", err)
 	}
-	adminCertKey := base64.StdEncoding.EncodeToString(adminCertKeyBte)
 
-	kc := &kubeconfig.Config{}
-	kc.Kind = "Cluster"
-	kc.APIVersion = "v1"
-	kc.Contexts = map[string]*kubeconfig.Context{
-		"default": &kubeconfig.Context{
-			Cluster:   "sim",
-			AuthInfo:  "admin",
-			Namespace: "default",
-		},
-	}
+	kc := kubeconfig.NewConfig()
+
+	cluster := kubeconfig.NewCluster()
+	cluster.CertificateAuthorityData = caCertByte
+	cluster.Server = "https://localhost:6443"
+
+	authInfo := kubeconfig.NewAuthInfo()
+	authInfo.ClientCertificateData = adminCertByte
+	authInfo.ClientKeyData = adminCertKeyByte
+
+	context := kubeconfig.NewContext()
+	context.AuthInfo = "default"
+	context.Cluster = "default"
+
+	kc.Clusters["default"] = cluster
+	kc.AuthInfos["default"] = authInfo
+	kc.Contexts["default"] = context
 	kc.CurrentContext = "default"
-	kc.AuthInfos = map[string]*kubeconfig.AuthInfo{
-		"sim": &kubeconfig.AuthInfo{
-			ClientCertificate: adminCert,
-			ClientKey:         adminCertKey,
-		},
-	}
 
-	kc.Clusters = map[string]*kubeconfig.Cluster{
-		"sim": &kubeconfig.Cluster{
-			Server:               "https://localhost:6443",
-			CertificateAuthority: caCert,
-		},
-	}
-
-	kcBytes, err := json.Marshal(kc)
+	err = clientcmd.WriteToFile(*kc, path)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(path, kcBytes, fs.FileMode(0644))
-	if err != nil {
-		return err
-	}
-
-	a.KubeConfig = path
-
-	clientConfig, err := clientcmd.NewClientConfigFromBytes(kcBytes)
-	if err != nil {
-		return err
-	}
+	clientConfig := clientcmd.NewDefaultClientConfig(*kc, nil)
 
 	config, err := clientConfig.ClientConfig()
 	if err != nil {

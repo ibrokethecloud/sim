@@ -56,9 +56,10 @@ func RunEmbeddedEtcd(ctx context.Context, path string, certs *certs.CertInfo) (*
 		cfg.PeerTLSInfo.TrustedCAFile = certs.CACert
 		cfg.PeerTLSInfo.ClientCertAuth = true
 
+		cfg.ClientTLSInfo.TrustedCAFile = certs.CACert
 		cfg.ClientTLSInfo.ServerName = "localhost"
-		cfg.ClientTLSInfo.CertFile = certs.EtcdClientCert
-		cfg.ClientTLSInfo.KeyFile = certs.EtcdClientCertKey
+		cfg.ClientTLSInfo.CertFile = certs.EtcdPeerCert
+		cfg.ClientTLSInfo.KeyFile = certs.EtcdPeerCertKey
 		cfg.ClientTLSInfo.TrustedCAFile = certs.CACert
 		cfg.ClientTLSInfo.ClientCertAuth = true
 	}
