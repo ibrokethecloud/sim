@@ -37,7 +37,7 @@ func main() {
 		logrus.Fatalf("error generating kubeconfig %v", err)
 	}
 
-	err = a.RunAPIServer()
+	err = a.RunAPIServer(ctx)
 	if err != nil {
 		logrus.Fatalf("error running API Server %v", err)
 	}

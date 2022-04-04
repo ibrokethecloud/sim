@@ -19,9 +19,6 @@ func TestGenerateCerts(t *testing.T) {
 		t.Fatal("error generating certificates")
 	}
 
-	t.Log(c)
-
-	t.Log("Verify Certificate KeyPairs")
 	_, err = tls.LoadX509KeyPair(c.CACert, c.CACertKey)
 	if err != nil {
 		t.Fatalf("error verifying CA keypair %v\n", err)

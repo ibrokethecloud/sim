@@ -19,7 +19,7 @@ func TestRunAPIServer(t *testing.T) {
 		t.Fatalf("error setting up temp directory for apiserver %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	a := APIServerConfig{}
@@ -41,7 +41,7 @@ func TestRunAPIServer(t *testing.T) {
 		t.Fatalf("error generating kubeconfig %v", err)
 	}
 
-	err = a.RunAPIServer()
+	err = a.RunAPIServer(ctx)
 	if err != nil {
 		t.Fatalf("error running API Server %v", err)
 	}

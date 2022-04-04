@@ -1,16 +1,16 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"github.com/ibrokethecloud/sim/pkg/certs"
 	"github.com/ibrokethecloud/sim/pkg/etcd"
 	"io/ioutil"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubeconfig "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/component-base/cli"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
-	"path/filepath"
 	"strings"
 )
 
@@ -25,62 +25,71 @@ const (
 	APIVersionsSupported = "v1=true,api/beta=false,api/alpha=false"
 )
 
-// Run APIServer will boot strap an API server with only core resources enabled
+// RunAPIServer will bootstrap an API server with only core resources enabled
 // No additional controllers will be scheduled
-func (a *APIServerConfig) RunAPIServer() error {
+func (a *APIServerConfig) RunAPIServer(ctx context.Context) error {
+	var err error
 	apiServer := app.NewAPIServerCommand()
 
 	//set flag values
-	apiServer.Flags().Set("tls-cert-file", a.Certs.APICert)
-	apiServer.Flags().Set("tls-private-key-file", a.Certs.APICert)
-	apiServer.Flags().Set("client-ca-file", a.Certs.CACert)
-	apiServer.Flags().Set("service-account-key-file", a.Certs.ServiceAccountCert)
-	apiServer.Flags().Set("service-account-signing-key-file", a.Certs.ServiceAccountCertKey)
-	apiServer.Flags().Set("service-account-issuer", "https://localhost:6443")
-	apiServer.Flags().Set("tls-cert-file", a.Certs.APICert)
-	apiServer.Flags().Set("tls-private-key-file", a.Certs.APICertKey)
-	apiServer.Flags().Set("runtime-config", APIVersionsSupported)
-	apiServer.Flags().Set("enable-priority-and-fairness", "false")
+	if err = apiServer.Flags().Set("tls-cert-file", a.Certs.APICert); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("tls-private-key-file", a.Certs.APICert); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("client-ca-file", a.Certs.CACert); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("service-account-key-file", a.Certs.ServiceAccountCert); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("service-account-signing-key-file", a.Certs.ServiceAccountCertKey); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("service-account-issuer", "https://localhost:6443"); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("tls-cert-file", a.Certs.APICert); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("tls-private-key-file", a.Certs.APICertKey); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("runtime-config", APIVersionsSupported); err != nil {
+		return err
+	}
+	if err = apiServer.Flags().Set("enable-priority-and-fairness", "false"); err != nil {
+		return err
+	}
 
 	etcdList := strings.Join(a.Etcd.Endpoints, ",")
-	apiServer.Flags().Set("etcd-servers", etcdList)
+	if err = apiServer.Flags().Set("etcd-servers", etcdList); err != nil {
+		return err
+	}
 
 	if a.Etcd.TLS != nil {
-		apiServer.Flags().Set("etcd-cafile", a.Certs.CACert)
-		apiServer.Flags().Set("etcd-certfile", a.Certs.EtcdClientCert)
-		apiServer.Flags().Set("etcd-keyfile", a.Certs.EtcdClientCertKey)
+		if err = apiServer.Flags().Set("etcd-cafile", a.Certs.CACert); err != nil {
+			return err
+		}
+		if err = apiServer.Flags().Set("etcd-certfile", a.Certs.EtcdClientCert); err != nil {
+			return err
+		}
+		if err = apiServer.Flags().Set("etcd-keyfile", a.Certs.EtcdClientCertKey); err != nil {
+			return err
+		}
 	}
 
-	return cli.RunNoErrOutput(apiServer)
+	// Shutdown when context is closed
+	go func() {
+		<-ctx.Done()
+		genericapiserver.RequestShutdown()
+	}()
+
+	return apiServer.ExecuteContext(ctx)
 }
 
-func (a *APIServerConfig) generateFlags() ([]string, error) {
-	var flags []string
-	if a.Certs == nil {
-		return flags, fmt.Errorf("no cert info present. ensure certs have been generated")
-	}
-
-	flags = append(flags, "--cert-dir", filepath.Join(a.Certs.Dir, "kubernetes"))
-	flags = append(flags, "--client-ca-file", a.Certs.CACert)
-	flags = append(flags, "--service-account-key-file", a.Certs.ServiceAccountCert)
-	flags = append(flags, "--service-account-signing-key-file", a.Certs.ServiceAccountCertKey)
-	flags = append(flags, "--service-account-issuer", "https://localhost:6443")
-	flags = append(flags, "--tls-cert-file", a.Certs.APICert)
-	flags = append(flags, "--tls-private-key-file", a.Certs.APICertKey)
-	flags = append(flags, "--runtime-config", APIVersionsSupported)
-	flags = append(flags, "--enable-priority-and-fairness", "false")
-	etcdList := strings.Join(a.Etcd.Endpoints, ",")
-	flags = append(flags, "--etcd-servers", etcdList)
-
-	if a.Etcd.TLS != nil {
-		flags = append(flags, "--etcd-cafile", a.Certs.CACert)
-		flags = append(flags, "--etcd-certfile", a.Certs.EtcdClientCert)
-		flags = append(flags, "--etcd-certfile", a.Certs.EtcdClientCertKey)
-	}
-	return flags, nil
-}
-
-// APIServerConfig will generate KubeConfig to allow access to cluster
+// GenerateKubeConfig will generate KubeConfig to allow access to cluster
 func (a *APIServerConfig) GenerateKubeConfig(path string) error {
 
 	caCertByte, err := ioutil.ReadFile(a.Certs.CACert)
