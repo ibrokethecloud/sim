@@ -1404,6 +1404,7 @@ k8s.io/kubelet v0.23.5 h1:eCGJ7olStiyF7TYHlUTjpXg2ltw7Bs9OPZcch8HP2Go=
 k8s.io/kubelet v0.23.5/go.mod h1:M0aj0gaX+rOaGfCfqkV6P7QbwtMwqbL6RdwviHmnehU=
 k8s.io/legacy-cloud-providers v0.23.5 h1:Oq0Kb/YY6qaXwdRXvlPWWtz5i6mJ62X98nuoKHfSHR8=
 k8s.io/legacy-cloud-providers v0.23.5/go.mod h1:IENlwY686f1fbakotgNf7gAQuIyCvOUIAXkPPPE/7KU=
+k8s.io/metrics v0.23.5 h1:u+3oGwdUWr30LT2v6MHdSJQ4Pbht9s0cVIWyuY5nf9c=
 k8s.io/metrics v0.23.5/go.mod h1:WNAtV2a5BYbmDS8+7jSqYYV6E3efuGTpIwJ8PTD1wgs=
 k8s.io/mount-utils v0.23.5 h1:MOhJKZTpfC21r5OamKYWMdVNtTMDD9wZfTkLOhI5nuE=
 k8s.io/mount-utils v0.23.5/go.mod h1:OTN3LQPiOGMfx/SmVlsnySwsAmh4gYrDYLchlMHtf98=

@@ -4,11 +4,14 @@ import (
 	"context"
 	"github.com/ibrokethecloud/sim/pkg/apiserver"
 	"github.com/ibrokethecloud/sim/pkg/certs"
-	etcd2 "github.com/ibrokethecloud/sim/pkg/etcd"
+	"github.com/ibrokethecloud/sim/pkg/etcd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	_ "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1"
+	_ "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"golang.org/x/sync/errgroup"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,6 +38,7 @@ var (
 	eg     *errgroup.Group
 	egctx  context.Context
 )
+
 var _ = BeforeSuite(func(done Done) {
 	defer close(done)
 	var err error
@@ -49,7 +53,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	a.Certs = certificates
 
-	etcd, err := etcd2.RunEmbeddedEtcd(ctx, dir, certificates)
+	etcd, err := etcd.RunEmbeddedEtcd(ctx, dir, certificates)
 	Expect(err).ToNot(HaveOccurred())
 	a.Etcd = etcd
 
@@ -71,6 +75,8 @@ var _ = BeforeSuite(func(done Done) {
 }, setupTimeout)
 
 var _ = AfterSuite(func(done Done) {
+	time.Sleep(300 * time.Second)
+	defer os.Remove(dir)
 	defer close(done)
 	cancel()
 }, setupTimeout)

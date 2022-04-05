@@ -22,7 +22,7 @@ type APIServerConfig struct {
 }
 
 const (
-	APIVersionsSupported = "v1=true,api/beta=false,api/alpha=false"
+	APIVersionsSupported = "v1=true,api/beta=true,api/alpha=false"
 )
 
 // RunAPIServer will bootstrap an API server with only core resources enabled
