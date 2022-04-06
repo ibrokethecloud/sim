@@ -17,10 +17,14 @@ var _ = Describe("Process Support Bundle", func() {
 	})
 
 	It("Load cluster scoped objects", func() {
-		Eventually(o.CreateUnstructuredClusterObjects(), 5, 60).ShouldNot(HaveOccurred())
+		Eventually(func() error {
+			return o.CreateUnstructuredClusterObjects()
+		}, 5, 60).ShouldNot(HaveOccurred())
 	})
 
 	It("Load namespace scoped objects", func() {
-		Eventually(o.CreateUnstructuredObjects(), 5, 60).ShouldNot(HaveOccurred())
+		Eventually(func() error {
+			return o.CreateUnstructuredObjects()
+		}, 5, 60).ShouldNot(HaveOccurred())
 	})
 })

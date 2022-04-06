@@ -3,17 +3,8 @@ package objects
 import (
 	"context"
 	"fmt"
-	"github.com/rancher/lasso/pkg/cache"
-	"github.com/rancher/lasso/pkg/client"
-	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/apply"
-	apiadmissionv1 "github.com/rancher/wrangler/pkg/generated/controllers/admissionregistration.k8s.io/v1"
-	apiextensionsv1 "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1"
-	apiregistrationv1 "github.com/rancher/wrangler/pkg/generated/controllers/apiregistration.k8s.io/v1"
-	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	wranglerunstructured "github.com/rancher/wrangler/pkg/unstructured"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,85 +15,26 @@ import (
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
-	"k8s.io/client-go/util/workqueue"
-	metrics "k8s.io/metrics/pkg/apis/metrics/install"
-	"time"
 )
 
 type ObjectManager struct {
-	ctx context.Context
-	apply.Apply
+	ctx    context.Context
 	path   string
 	config *rest.Config
 	kc     *kubernetes.Clientset
 	dc     dynamic.Interface
 }
 
-func init() {
-	metrics.Install(scheme.Scheme)
-}
+const (
+	simCreationTimeStamp = "sim.harvesterhci.io/creationTimestamp"
+)
 
 // NewObjectManager is a wrapper around apply and support bundle path
 func NewObjectManager(ctx context.Context, config *rest.Config, path string) (*ObjectManager, error) {
 
-	discovery, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
 	dclient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	rateLimit := workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 5*time.Minute)
-	workqueue.DefaultControllerRateLimiter()
-	clientFactory, err := client.NewSharedClientFactory(config, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	cacheFactory := cache.NewSharedCachedFactory(clientFactory, nil)
-
-	scf := controller.NewSharedControllerFactory(cacheFactory, &controller.SharedControllerFactoryOptions{
-		DefaultRateLimiter: rateLimit,
-		DefaultWorkers:     5,
-	})
-
-	cmController := v1.NewConfigMapController(schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
-	}, "configmap", true, scf)
-
-	apiExtensionsController := apiextensionsv1.NewCustomResourceDefinitionController(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Version: "v1",
-		Kind:    "CustomResourceDefinition",
-	}, "apiextensions", false, scf)
-
-	validatingWebhookController := apiadmissionv1.NewValidatingWebhookConfigurationController(schema.GroupVersionKind{
-		Group:   "admissionregistration.k8s.io",
-		Version: "v1",
-		Kind:    "ValidatingWebhookConfiguration",
-	}, "validatingwebhook", false, scf)
-
-	mutatingWebhookController := apiadmissionv1.NewValidatingWebhookConfigurationController(schema.GroupVersionKind{
-		Group:   "admissionregistration.k8s.io",
-		Version: "v1",
-		Kind:    "MutatingWebhookConfiguration",
-	}, "mutatingwebhook", false, scf)
-
-	apiService := apiregistrationv1.NewAPIServiceController(schema.GroupVersionKind{
-		Group:   "apiregistration.k8s.io",
-		Version: "v1",
-		Kind:    "APIService",
-	}, "apiservice", false, scf)
-
-	a := apply.New(discovery, apply.NewClientFactory(config), cmController, apiExtensionsController, validatingWebhookController, mutatingWebhookController, apiService)
 	if err != nil {
 		return nil, err
 	}
@@ -113,71 +45,11 @@ func NewObjectManager(ctx context.Context, config *rest.Config, path string) (*O
 	}
 	return &ObjectManager{
 		ctx:    ctx,
-		Apply:  a,
 		path:   path,
 		config: config,
 		kc:     kc,
 		dc:     dclient,
 	}, nil
-}
-
-// CreateClusterScopedObjects will parse all cluster scoped objects and
-// create them
-func (o *ObjectManager) CreateClusterScopedObjects() error {
-	crds, clusterObjs, err := GenerateClusterScopedRuntimeObjects(o.path)
-	if err != nil {
-		return err
-	}
-
-	clusterObjCm, err := o.createOwnerCM("cluster-owner")
-	if err != nil {
-		return fmt.Errorf("error creating cluster owner cm %v", err)
-	}
-
-	err = o.WithContext(o.ctx).WithOwner(clusterObjCm).ApplyObjects(crds...)
-	if err != nil {
-		return fmt.Errorf("error during CRD application %v", err)
-	}
-
-	err = o.WithContext(o.ctx).WithOwner(clusterObjCm).ApplyObjects(clusterObjs...)
-	if err != nil {
-		return fmt.Errorf("error durnig Cluster scoped object application %v", err)
-	}
-
-	return nil
-}
-
-// checkAndCreateNamespace will check and create a namespace if needed
-func (o *ObjectManager) checkAndCreateNamespace(ns string) error {
-	_, err := o.kc.CoreV1().Namespaces().Get(o.ctx, ns, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			namespace := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ns,
-				},
-			}
-			_, err = o.kc.CoreV1().Namespaces().Create(o.ctx, namespace, metav1.CreateOptions{})
-			return err
-		} else {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (o *ObjectManager) createOwnerCM(name string) (*corev1.ConfigMap, error) {
-	cm := corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "default",
-		},
-		Data: map[string]string{
-			"key": "value",
-		},
-	}
-	return o.kc.CoreV1().ConfigMaps("default").Create(o.ctx, &cm, metav1.CreateOptions{})
 }
 
 // CreateUnstructuredClusterObjects will use the dynamic client to create all
@@ -236,6 +108,11 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 			return fmt.Errorf("error converting obj to unstructured %v", err)
 		}
 
+		err = objectHousekeeping(unstructuredObj)
+		if err != nil {
+			return fmt.Errorf("error during housekeeping on objects %v", err)
+		}
+
 		restMapping, err := findGVR(v.GetObjectKind().GroupVersionKind(), o.config)
 		if err != nil {
 			return fmt.Errorf("error looking up GVR %v", err)
@@ -250,8 +127,6 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 			dr = o.dc.Resource(restMapping.Resource)
 		}
 
-		// need to clear resource version before apply
-		unstructured.RemoveNestedField(unstructuredObj.Object, "metadata", "resourceVersion")
 		logrus.Infof("about to create resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
 		resp, err = dr.Create(o.ctx, unstructuredObj, metav1.CreateOptions{})
 		if err != nil {
@@ -271,6 +146,61 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 	return nil
 }
 
+// objectHousekeeping will perform some common housekeeping tasks based on GVR
+// needed to keep the apiserver happy since we are dealing with exported CRDs
+func objectHousekeeping(obj *unstructured.Unstructured) error {
+	// Common housekeeping performed on all objects
+	// need to clear resource version before apply.
+	// this will be added as an annotation
+	annotations, ok, err := unstructured.NestedStringMap(obj.Object, "metadata", "annotations")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		annotations = make(map[string]string)
+	}
+
+	resourceVersion, ok, err := unstructured.NestedString(obj.Object, "metadata", "resourceVersion")
+	if err != nil {
+		return err
+	}
+	if ok {
+		annotations[simCreationTimeStamp] = resourceVersion
+		unstructured.RemoveNestedField(obj.Object, "metadata", "resourceVersion")
+		err = unstructured.SetNestedStringMap(obj.Object, annotations, "metadata", "annotations")
+		if err != nil {
+			return err
+		}
+	}
+
+	// GVR specific housekeeping
+	if obj.GetKind() == "DaemonSet" || obj.GetKind() == "Deployment" || obj.GetKind() == "ReplicaSet" || obj.GetKind() == "StatefulSet" {
+		// clear up any null timestamps from the template
+		unstructured.RemoveNestedField(obj.Object, "spec", "template", "metadata", "creationTimestamp")
+		// clear up type from hostPath volumes
+		template, ok, err := unstructured.NestedFieldCopy(obj.Object, "spec", "template", "spec", "volumes")
+		if err != nil {
+			panic(err)
+		}
+
+		var cleanedVolumes []interface{}
+		if ok {
+			for _, v := range template.([]interface{}) {
+				unstructured.RemoveNestedField(v.(map[string]interface{}), "hostPath", "type")
+				cleanedVolumes = append(cleanedVolumes, v)
+			}
+		}
+		err = unstructured.SetNestedField(obj.Object, cleanedVolumes, "spec", "template", "spec", "volumes")
+	}
+
+	// Ingresses are exported as extensions/v1beta1
+	if obj.GetKind() == "Ingress" {
+		obj.SetAPIVersion("networking.k8s.io/v1")
+	}
+
+	return nil
+}
+
 // wrapper to lookup GVR for usage with dynamic client
 func findGVR(gvk schema.GroupVersionKind, cfg *rest.Config) (*meta.RESTMapping, error) {
 
@@ -282,4 +212,15 @@ func findGVR(gvk schema.GroupVersionKind, cfg *rest.Config) (*meta.RESTMapping, 
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
 
 	return mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+}
+
+//verifyObj is a helper method used to verify objects to make it easier to test
+func verifyObject(obj *unstructured.Unstructured, fn func(interface{}) (bool, error), keys ...string) (ok bool, err error) {
+	tmpObj, ok, err := unstructured.NestedFieldCopy(obj.Object, keys...)
+	// if not found or no key present
+	if err != nil || !ok {
+		return ok, err
+	}
+
+	return fn(tmpObj)
 }
