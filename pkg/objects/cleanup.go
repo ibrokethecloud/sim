@@ -27,3 +27,11 @@ func copyKeyValue(obj map[string]string, key string, newKey string) {
 		delete(obj, key)
 	}
 }
+
+// cleans the apiService to point to no-where
+func apiServiceCleanup(obj *unstructured.Unstructured) error {
+	unstructured.RemoveNestedField(obj.Object, "spec", "service")
+	unstructured.RemoveNestedField(obj.Object, "spec", "caBundle")
+	unstructured.RemoveNestedField(obj.Object, "spec", "insecureSkipTLSVerify")
+	return nil
+}

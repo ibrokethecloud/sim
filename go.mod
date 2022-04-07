@@ -6,7 +6,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
-	github.com/rancher/mapper v0.0.0-20190814232720-058a8b7feb99
 	github.com/rancher/wrangler v0.8.10
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/pflag v1.0.5
@@ -18,7 +17,7 @@ require (
 	k8s.io/api v0.23.5
 	k8s.io/apimachinery v0.23.5
 	k8s.io/apiserver v0.23.5
-	k8s.io/client-go v2.0.0-alpha.0.0.20190307161346-7621a5ebb88b+incompatible
+	k8s.io/client-go v0.23.5
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 )
 

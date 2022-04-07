@@ -42,18 +42,6 @@ items:
     labels:
       controller-uid: d995bf7d-d9d8-4645-81e2-48f8388dee2f
       job-name: default-default
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-03-06T23:10:38Z"
-      manager: calico
-      operation: Update
-      time: "2022-03-06T23:10:39Z"
-      manager: multus
-      operation: Update
-      time: "2022-03-06T23:10:39Z"
-      manager: kubelet
-      operation: Update
-      time: "2022-03-06T23:10:48Z"
     name: default-default-dng8k
     namespace: harvester-system
     ownerReferences:

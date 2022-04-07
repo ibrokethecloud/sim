@@ -92,9 +92,9 @@ func GenerateNamespacedRuntimeObjects(path string) (nonpods []runtime.Object, po
 			if err != nil {
 				return err
 			}
-			if strings.Contains(absPath, "pods.yaml") {
+			if strings.Contains(absPath, "pods.yaml") && !strings.Contains(absPath, "metrics.k8s.io") {
 				podList = append(podList, absPath)
-			} else if strings.Contains(absPath, "events.k8s.io") || strings.Contains(absPath, "ingresses.yaml") {
+			} else if strings.Contains(absPath, "events.k8s.io") || strings.Contains(absPath, "ingresses.yaml") || strings.Contains(absPath, "metrics.k8s.io") {
 				// skip events.k8s.io events and leverage v1 events
 			} else {
 				nonPodList = append(nonPodList, absPath)

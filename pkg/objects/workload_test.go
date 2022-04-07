@@ -13,6 +13,7 @@ const (
 	testRSFilePath      = "../../samples/sampleSupportBundle/yamls/namespaced/cattle-monitoring-system/apps/v1/replicasets.yaml"
 	testIngressFilePath = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/extensions/v1beta1/ingresses.yaml"
 	testSettingsPath    = "../../samples/sampleSupportBundle/yamls/cluster/management.cattle.io/v3/settings.yaml"
+	testJobPath         = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/batch/v1/jobs.yaml"
 )
 
 // TestParseDaemonSet will verify a sample Daemonset
@@ -106,6 +107,37 @@ func verifyTestWorkloads(t *testing.T, path string) {
 
 		if ok {
 			t.Fatalf("expected to find no type for hostPath volume definitions")
+		}
+	}
+}
+
+func TestVerifyJob(t *testing.T) {
+	objs, err := generateObjects(testJobPath)
+	if err != nil {
+		t.Fatalf("error reading sample daemonset file %s %v", testDSFilePath, err)
+	}
+	for _, obj := range objs {
+		unstructObj, err := wranglerunstructured.ToUnstructured(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = cleanupObjects(unstructObj.Object)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = objectHousekeeping(unstructObj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		labels, ok, err := unstructured.NestedStringMap(unstructObj.Object, "spec", "template", "metadata", "labels")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ok {
+			t.Fatalf("expect to find no labels but found labels %v", labels)
 		}
 	}
 }

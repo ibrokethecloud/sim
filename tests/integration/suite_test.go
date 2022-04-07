@@ -20,7 +20,7 @@ import (
 const (
 	timeout      = time.Second * 10
 	duration     = time.Second * 10
-	setupTimeout = 300
+	setupTimeout = 600
 	samplesPath  = "../../samples/sampleSupportBundle"
 )
 
@@ -75,7 +75,7 @@ var _ = BeforeSuite(func(done Done) {
 }, setupTimeout)
 
 var _ = AfterSuite(func(done Done) {
-	time.Sleep(300 * time.Second)
+	time.Sleep(500 * time.Second)
 	defer os.Remove(dir)
 	defer close(done)
 	cancel()

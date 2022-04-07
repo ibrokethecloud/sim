@@ -67,7 +67,12 @@ func (o *ObjectManager) CreateUnstructuredClusterObjects() error {
 		return err
 	}
 
-	err = o.applyObjects(clusterObjs, false, nil)
+	err = o.applyObjects(clusterObjs, false, &schema.GroupVersionResource{
+		Group:    "apiregistration.k8s.io",
+		Version:  "v1",
+		Resource: "apiservices",
+	})
+
 	if err != nil {
 		return err
 	}
@@ -118,7 +123,7 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 
 		restMapping, err := findGVR(v.GetObjectKind().GroupVersionKind(), o.config)
 		if err != nil {
-			return fmt.Errorf("error looking up GVR %v", err)
+			return fmt.Errorf("error looking up GVR %v for object %v", err, unstructuredObj)
 		}
 
 		if skipGVR != nil && restMapping.Resource == *skipGVR {
@@ -135,7 +140,7 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 			if apierrors.IsAlreadyExists(err) {
 				continue
 			} else {
-				logrus.Error("error during creation of resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
+				logrus.Errorf("error during creation of resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
 				logrus.Error(unstructuredObj.Object)
 				return fmt.Errorf("error during creation of unstructured resource %v", err)
 			}
@@ -183,6 +188,8 @@ func objectHousekeeping(obj *unstructured.Unstructured) error {
 		err = ingressCleanup(obj)
 	case "Job", "Batch":
 		err = jobCleanup(obj)
+	case "APIService":
+		err = apiServiceCleanup(obj)
 	}
 	return err
 }
