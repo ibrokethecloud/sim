@@ -29,6 +29,7 @@ type ObjectManager struct {
 
 const (
 	simCreationTimeStamp = "sim.harvesterhci.io/creationTimestamp"
+	simLabelPrefix       = "sim.harvesterhci.io/"
 )
 
 // NewObjectManager is a wrapper around apply and support bundle path
@@ -66,11 +67,7 @@ func (o *ObjectManager) CreateUnstructuredClusterObjects() error {
 		return err
 	}
 
-	err = o.applyObjects(clusterObjs, false, &schema.GroupVersionResource{
-		Group:    "apiregistration.k8s.io",
-		Version:  "v1",
-		Resource: "apiservices",
-	})
+	err = o.applyObjects(clusterObjs, false, nil)
 	if err != nil {
 		return err
 	}
@@ -108,6 +105,12 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 			return fmt.Errorf("error converting obj to unstructured %v", err)
 		}
 
+		err = cleanupObjects(unstructuredObj.Object)
+		if err != nil {
+			return err
+		}
+
+		//GVK specific cleanup needed before objects can be created
 		err = objectHousekeeping(unstructuredObj)
 		if err != nil {
 			return fmt.Errorf("error during housekeeping on objects %v", err)
@@ -127,12 +130,13 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 			dr = o.dc.Resource(restMapping.Resource)
 		}
 
-		logrus.Infof("about to create resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
 		resp, err = dr.Create(o.ctx, unstructuredObj, metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
 				continue
 			} else {
+				logrus.Error("error during creation of resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
+				logrus.Error(unstructuredObj.Object)
 				return fmt.Errorf("error during creation of unstructured resource %v", err)
 			}
 
@@ -160,12 +164,12 @@ func objectHousekeeping(obj *unstructured.Unstructured) error {
 		annotations = make(map[string]string)
 	}
 
-	resourceVersion, ok, err := unstructured.NestedString(obj.Object, "metadata", "resourceVersion")
+	orgCreationTimestamp, ok, err := unstructured.NestedString(obj.Object, "metadata", "creationTimestamp")
 	if err != nil {
 		return err
 	}
 	if ok {
-		annotations[simCreationTimeStamp] = resourceVersion
+		annotations[simCreationTimeStamp] = orgCreationTimestamp
 		unstructured.RemoveNestedField(obj.Object, "metadata", "resourceVersion")
 		err = unstructured.SetNestedStringMap(obj.Object, annotations, "metadata", "annotations")
 		if err != nil {
@@ -173,32 +177,14 @@ func objectHousekeeping(obj *unstructured.Unstructured) error {
 		}
 	}
 
-	// GVR specific housekeeping
-	if obj.GetKind() == "DaemonSet" || obj.GetKind() == "Deployment" || obj.GetKind() == "ReplicaSet" || obj.GetKind() == "StatefulSet" {
-		// clear up any null timestamps from the template
-		unstructured.RemoveNestedField(obj.Object, "spec", "template", "metadata", "creationTimestamp")
-		// clear up type from hostPath volumes
-		template, ok, err := unstructured.NestedFieldCopy(obj.Object, "spec", "template", "spec", "volumes")
-		if err != nil {
-			panic(err)
-		}
-
-		var cleanedVolumes []interface{}
-		if ok {
-			for _, v := range template.([]interface{}) {
-				unstructured.RemoveNestedField(v.(map[string]interface{}), "hostPath", "type")
-				cleanedVolumes = append(cleanedVolumes, v)
-			}
-		}
-		err = unstructured.SetNestedField(obj.Object, cleanedVolumes, "spec", "template", "spec", "volumes")
+	switch obj.GetKind() {
+	case "Ingress":
+		// Ingress specific housekeeping
+		err = ingressCleanup(obj)
+	case "Job", "Batch":
+		err = jobCleanup(obj)
 	}
-
-	// Ingresses are exported as extensions/v1beta1
-	if obj.GetKind() == "Ingress" {
-		obj.SetAPIVersion("networking.k8s.io/v1")
-	}
-
-	return nil
+	return err
 }
 
 // wrapper to lookup GVR for usage with dynamic client
@@ -222,5 +208,55 @@ func verifyObject(obj *unstructured.Unstructured, fn func(interface{}) (bool, er
 		return ok, err
 	}
 
-	return fn(tmpObj)
+	if fn != nil {
+		return fn(tmpObj)
+	}
+
+	return ok, err
+}
+
+// cleanupObjects will clean up all "null" strings that appear in
+// support bundles.
+func cleanupObjects(obj map[string]interface{}) error {
+	// key: null is a valid value in prometheusrules, hence that is ignored from this cleanup
+	for key, value := range obj {
+		if v, ok := value.(string); ok && v == "null" && key != "key" {
+			delete(obj, key)
+		}
+
+		if _, ok := value.([]string); ok {
+			continue
+		}
+
+		if key == "resourceVersion" {
+			delete(obj, key)
+		}
+
+		if valArr, ok := value.([]interface{}); ok {
+			var newArr []interface{}
+			for _, v := range valArr {
+				newMap, innerOK := v.(map[string]interface{})
+				if innerOK {
+					err := cleanupObjects(newMap)
+					if err != nil {
+						return err
+					}
+					newArr = append(newArr, newMap)
+				}
+
+			}
+			if len(newArr) != 0 {
+				obj[key] = newArr
+			}
+		}
+
+		if valMap, ok := value.(map[string]interface{}); ok {
+			err := cleanupObjects(valMap)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

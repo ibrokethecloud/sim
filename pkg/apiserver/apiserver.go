@@ -65,6 +65,9 @@ func (a *APIServerConfig) RunAPIServer(ctx context.Context) error {
 	if err = apiServer.Flags().Set("service-cluster-ip-range", "10.53.0.0/16"); err != nil {
 		return err
 	}
+	if err = apiServer.Flags().Set("allow-privileged", "true"); err != nil {
+		return err
+	}
 
 	etcdList := strings.Join(a.Etcd.Endpoints, ",")
 	if err = apiServer.Flags().Set("etcd-servers", etcdList); err != nil {

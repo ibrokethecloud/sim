@@ -12,6 +12,7 @@ const (
 	testDeployFilePath  = "../../samples/sampleSupportBundle/yamls/namespaced/cattle-monitoring-system/apps/v1/deployments.yaml"
 	testRSFilePath      = "../../samples/sampleSupportBundle/yamls/namespaced/cattle-monitoring-system/apps/v1/replicasets.yaml"
 	testIngressFilePath = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/extensions/v1beta1/ingresses.yaml"
+	testSettingsPath    = "../../samples/sampleSupportBundle/yamls/cluster/management.cattle.io/v3/settings.yaml"
 )
 
 // TestParseDaemonSet will verify a sample Daemonset
@@ -39,6 +40,10 @@ func TestIngressObject(t *testing.T) {
 	verifyTestWorkloads(t, testIngressFilePath)
 }
 
+func TestSettings(t *testing.T) {
+	verifyTestWorkloads(t, testSettingsPath)
+}
+
 func verifyTestWorkloads(t *testing.T, path string) {
 	objs, err := generateObjects(path)
 	if err != nil {
@@ -50,7 +55,16 @@ func verifyTestWorkloads(t *testing.T, path string) {
 		if err != nil {
 			t.Fatalf("error converting runtime object to unstructured object %v", err)
 		}
-		err = objectHousekeeping(unstructObj)
+
+		t.Log("object pre cleanup")
+		t.Logf("%v \n", unstructObj.Object)
+		err = cleanupObjects(unstructObj.Object)
+		if err != nil {
+			t.Fatalf("error cleaning up objects %v", err)
+		}
+
+		t.Logf("%v \n", unstructObj.Object)
+
 		if err != nil {
 			t.Fatalf("error performing housekeeping on unstructured daemonset")
 		}

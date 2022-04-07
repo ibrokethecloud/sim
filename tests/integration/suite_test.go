@@ -75,7 +75,7 @@ var _ = BeforeSuite(func(done Done) {
 }, setupTimeout)
 
 var _ = AfterSuite(func(done Done) {
-	//time.Sleep(300 * time.Second)
+	time.Sleep(300 * time.Second)
 	defer os.Remove(dir)
 	defer close(done)
 	cancel()

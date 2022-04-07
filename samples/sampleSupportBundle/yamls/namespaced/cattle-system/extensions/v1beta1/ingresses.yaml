@@ -39,8 +39,12 @@ items:
     - http:
         paths:
         - backend:
-            serviceName: rancher
-            servicePort: 80
+            service:
+              name: rancher
+              port:
+                number: 80
+#            serviceName: rancher
+#            servicePort: 80
           path: /
           pathType: Prefix
   status:
