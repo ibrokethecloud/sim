@@ -39,6 +39,11 @@ var (
 	egctx  context.Context
 )
 
+const (
+	samplePodSpec = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/v1/pods.yaml"
+	namespaceSpec = "../../samples/sampleSupportBundle/yamls/cluster/v1/namespaces.yaml"
+)
+
 var _ = BeforeSuite(func(done Done) {
 	defer close(done)
 	var err error
@@ -76,7 +81,7 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func(done Done) {
 	time.Sleep(500 * time.Second)
-	defer os.Remove(dir)
+	defer os.RemoveAll(dir)
 	defer close(done)
 	cancel()
 }, setupTimeout)

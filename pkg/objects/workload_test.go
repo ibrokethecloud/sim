@@ -46,7 +46,7 @@ func TestSettings(t *testing.T) {
 }
 
 func verifyTestWorkloads(t *testing.T, path string) {
-	objs, err := generateObjects(path)
+	objs, err := GenerateObjects(path)
 	if err != nil {
 		t.Fatalf("error reading sample daemonset file %s %v", testDSFilePath, err)
 	}
@@ -63,8 +63,6 @@ func verifyTestWorkloads(t *testing.T, path string) {
 		if err != nil {
 			t.Fatalf("error cleaning up objects %v", err)
 		}
-
-		t.Logf("%v \n", unstructObj.Object)
 
 		if err != nil {
 			t.Fatalf("error performing housekeeping on unstructured daemonset")
@@ -112,7 +110,7 @@ func verifyTestWorkloads(t *testing.T, path string) {
 }
 
 func TestVerifyJob(t *testing.T) {
-	objs, err := generateObjects(testJobPath)
+	objs, err := GenerateObjects(testJobPath)
 	if err != nil {
 		t.Fatalf("error reading sample daemonset file %s %v", testDSFilePath, err)
 	}

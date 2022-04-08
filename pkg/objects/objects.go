@@ -3,8 +3,10 @@ package objects
 import (
 	"bytes"
 	"fmt"
+	wranglerunstructured "github.com/rancher/wrangler/pkg/unstructured"
 	"github.com/rancher/wrangler/pkg/yaml"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"os"
 	"path/filepath"
@@ -34,10 +36,6 @@ func GenerateClusterScopedRuntimeObjects(path string) (crd []runtime.Object, clu
 			}
 			if strings.Contains(absPath, "apiextensions.k8s.io") {
 				crdList = append(crdList, absPath)
-			} else if strings.Contains(absPath, "admissionregistration.k8s.io") || strings.Contains(absPath, "metrics.k8s.io") || strings.Contains(absPath, "componentstatuses") {
-				// TODO: Right now ignorning admission registration
-				// as there are no actual running services and this breaks object processing.
-				// TODO: Also ignoring metrics as we dont have API aggregation available
 			} else {
 				noncrdList = append(noncrdList, absPath)
 			}
@@ -52,7 +50,7 @@ func GenerateClusterScopedRuntimeObjects(path string) (crd []runtime.Object, clu
 
 	// generate objects //
 	for _, v := range crdList {
-		obj, err := generateObjects(v)
+		obj, err := GenerateObjects(v)
 		if err != nil {
 			return crd, clusterObjs, err
 		}
@@ -60,7 +58,7 @@ func GenerateClusterScopedRuntimeObjects(path string) (crd []runtime.Object, clu
 	}
 
 	for _, v := range noncrdList {
-		obj, err := generateObjects(v)
+		obj, err := GenerateObjects(v)
 		if err != nil {
 			return crd, clusterObjs, err
 		}
@@ -94,8 +92,6 @@ func GenerateNamespacedRuntimeObjects(path string) (nonpods []runtime.Object, po
 			}
 			if strings.Contains(absPath, "pods.yaml") && !strings.Contains(absPath, "metrics.k8s.io") {
 				podList = append(podList, absPath)
-			} else if strings.Contains(absPath, "events.k8s.io") || strings.Contains(absPath, "ingresses.yaml") || strings.Contains(absPath, "metrics.k8s.io") {
-				// skip events.k8s.io events and leverage v1 events
 			} else {
 				nonPodList = append(nonPodList, absPath)
 			}
@@ -111,7 +107,7 @@ func GenerateNamespacedRuntimeObjects(path string) (nonpods []runtime.Object, po
 	// walk each list to get the runtime objects and populate the maps
 	// generate objects //
 	for _, v := range podList {
-		obj, err := generateObjects(v)
+		obj, err := GenerateObjects(v)
 		if err != nil {
 			return nonpods, pods, err
 		}
@@ -119,7 +115,7 @@ func GenerateNamespacedRuntimeObjects(path string) (nonpods []runtime.Object, po
 	}
 
 	for _, v := range nonPodList {
-		obj, err := generateObjects(v)
+		obj, err := GenerateObjects(v)
 		if err != nil {
 			return nonpods, pods, err
 		}
@@ -129,7 +125,7 @@ func GenerateNamespacedRuntimeObjects(path string) (nonpods []runtime.Object, po
 	return nonpods, pods, err
 }
 
-func generateObjects(file string) (obj []runtime.Object, err error) {
+func GenerateObjects(file string) (obj []runtime.Object, err error) {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		return obj, err
@@ -137,20 +133,21 @@ func generateObjects(file string) (obj []runtime.Object, err error) {
 
 	obj, err = yaml.ToObjects(bytes.NewReader(content))
 	return obj, err
-	/*if err != nil {
-		return obj, err
+}
+
+func GenerateUnstructuredObjects(file string) (objs []*unstructured.Unstructured, err error) {
+	runObjs, err := GenerateObjects(file)
+	if err != nil {
+		return objs, err
 	}
 
-	// additional conversion to unstructured type to allow wiping the resource version
-
-	for _, o := range tmpObj {
-		unstructuredObj, err := unstructured.ToUnstructured(o)
+	for _, runObj := range runObjs {
+		obj, err := wranglerunstructured.ToUnstructured(runObj)
 		if err != nil {
-			return obj, err
+			return objs, err
 		}
-		unstructuredObj.SetResourceVersion("")
-		obj = append(obj, unstructuredObj)
+		objs = append(objs, obj)
 	}
 
-	return obj, nil*/
+	return objs, err
 }

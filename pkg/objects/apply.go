@@ -32,6 +32,22 @@ const (
 	simLabelPrefix       = "sim.harvesterhci.io/"
 )
 
+// currently we are skipping certain objects during bundle processing
+// this map helps speed up the process and is easier to maintain
+var (
+	skippedGroups = map[string]bool{
+		"events.k8s.io":                true,
+		"admissionregistration.k8s.io": true,
+		"apiregistration.k8s.io":       true,
+		"metrics.k8s.io":               true,
+	}
+
+	skippedKinds = map[string]bool{
+		"Ingress":         true, // only skipped due to baseline version of sim
+		"ComponentStatus": true,
+	}
+)
+
 // NewObjectManager is a wrapper around apply and support bundle path
 func NewObjectManager(ctx context.Context, config *rest.Config, path string) (*ObjectManager, error) {
 
@@ -62,16 +78,12 @@ func (o *ObjectManager) CreateUnstructuredClusterObjects() error {
 	}
 
 	// apply CRDs first
-	err = o.applyObjects(crds, false, nil)
+	err = o.ApplyObjects(crds, false, nil)
 	if err != nil {
 		return err
 	}
 
-	err = o.applyObjects(clusterObjs, false, &schema.GroupVersionResource{
-		Group:    "apiregistration.k8s.io",
-		Version:  "v1",
-		Resource: "apiservices",
-	})
+	err = o.ApplyObjects(clusterObjs, true, nil)
 
 	if err != nil {
 		return err
@@ -87,27 +99,33 @@ func (o *ObjectManager) CreateUnstructuredObjects() error {
 		return err
 	}
 
-	// apply CRDs first
-	err = o.applyObjects(nonpods, false, nil)
+	// apply non pods first
+	err = o.ApplyObjects(nonpods, true, nil)
 	if err != nil {
 		return err
 	}
 
-	err = o.applyObjects(pods, false, nil)
+	err = o.ApplyObjects(pods, true, nil)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// applyObjects is a wrapper to convert runtime.Objects to unstructured.Unstructured, perform some housekeeping before submitting the same to apiserver
-func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, skipGVR *schema.GroupVersionResource) error {
+// ApplyObjects is a wrapper to convert runtime.Objects to unstructured.Unstructured, perform some housekeeping before submitting the same to apiserver
+func (o *ObjectManager) ApplyObjects(objs []runtime.Object, patchStatus bool, skipGVR *schema.GroupVersionResource) error {
 	var dr dynamic.ResourceInterface
 	var resp *unstructured.Unstructured
 	for _, v := range objs {
 		unstructuredObj, err := wranglerunstructured.ToUnstructured(v)
 		if err != nil {
 			return fmt.Errorf("error converting obj to unstructured %v", err)
+		}
+
+		// skip objects that dont need to be processed //
+
+		if skippedGroups[unstructuredObj.GroupVersionKind().Group] || skippedKinds[unstructuredObj.GetKind()] {
+			continue
 		}
 
 		err = cleanupObjects(unstructuredObj.Object)
@@ -149,7 +167,24 @@ func (o *ObjectManager) applyObjects(objs []runtime.Object, patchStatus bool, sk
 
 		if patchStatus {
 			// we will patch the status here later
-			logrus.Info(resp)
+			status, ok, err := unstructured.NestedFieldCopy(unstructuredObj.Object, "status")
+			if err != nil {
+				return fmt.Errorf("error looking for status field: %v", err)
+			}
+			if ok {
+				/*processedObj, err := dr.Get(o.ctx, resp.GetName(), metav1.GetOptions{})
+				if err != nil && !apierrors.IsNotFound(err) {
+					return fmt.Errorf("error looking up resource %s with gvr %v with error %v", unstructuredObj.GetName(), unstructuredObj.GroupVersionKind(), err)
+				}*/
+				unstructured.SetNestedField(resp.Object, status, "status")
+				_, err = dr.UpdateStatus(o.ctx, resp, metav1.UpdateOptions{})
+				// update sometimes returns this object not found error
+				// the 404 lookup is to try and work around the same.
+				if err != nil && !apierrors.IsNotFound(err) {
+					return fmt.Errorf("error updating status on resource %s with gvr %v with error %v", resp.GetName(), resp.GroupVersionKind(), err)
+				}
+			}
+
 		}
 	}
 	return nil
@@ -266,4 +301,24 @@ func cleanupObjects(obj map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+// FetchObject will use the dynamic client to fetch runtime.Object from apiserver.
+func (o *ObjectManager) FetchObject(obj runtime.Object) (*unstructured.Unstructured, error) {
+	var dr dynamic.ResourceInterface
+	unstructObj, err := wranglerunstructured.ToUnstructured(obj)
+	if err != nil {
+		return nil, err
+	}
+	restMapping, err := findGVR(unstructObj.GroupVersionKind(), o.config)
+	if err != nil {
+		return nil, err
+	}
+	if restMapping.Scope.Name() == meta.RESTScopeNameNamespace {
+		dr = o.dc.Resource(restMapping.Resource).Namespace(unstructObj.GetNamespace())
+	} else {
+		dr = o.dc.Resource(restMapping.Resource)
+	}
+
+	return dr.Get(o.ctx, unstructObj.GetName(), metav1.GetOptions{})
 }

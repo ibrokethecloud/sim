@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	supportbundle "github.com/ibrokethecloud/sim/pkg/provider"
-	"github.com/ibrokethecloud/sim/pkg/setup"
 	"github.com/spf13/pflag"
 	"github.com/virtual-kubelet/node-cli/opts"
 	"k8s.io/client-go/rest"
@@ -62,11 +61,7 @@ func main() {
 			}
 
 			config, err = clientcmd.BuildConfigFromFlags("", o.KubeConfigPath)
-			if err != nil {
-				return err
-			}
-
-			return setup.SetupPodObjects(ctx, config, path)
+			return err
 		}),
 	)
 

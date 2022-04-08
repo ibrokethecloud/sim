@@ -69,7 +69,7 @@ func (p *Provider) DeletePod(ctx context.Context, pod *v1.Pod) (err error) {
 	return nil
 }
 
-// GetPod returns the pod running in the Nomad cluster. returns nil
+// GetPod returns the pod running in the cluster. returns nil
 // if pod is not found.
 func (p *Provider) GetPod(ctx context.Context, namespace, name string) (pod *v1.Pod, err error) {
 	pod, err = p.client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
