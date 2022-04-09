@@ -2,6 +2,12 @@ package integration
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/ibrokethecloud/sim/pkg/apiserver"
 	"github.com/ibrokethecloud/sim/pkg/certs"
 	"github.com/ibrokethecloud/sim/pkg/etcd"
@@ -10,11 +16,6 @@ import (
 	_ "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1"
 	_ "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"golang.org/x/sync/errgroup"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 const (
@@ -71,16 +72,14 @@ var _ = BeforeSuite(func(done Done) {
 		return a.RunAPIServer(egctx)
 	})
 
+	// wait for apiserver to start
+	time.Sleep(30 * time.Second)
 	eg.Go(func() error {
 		return eg.Wait()
 	})
-
-	// wait for apiserver to start
-	time.Sleep(30 * time.Second)
 }, setupTimeout)
 
 var _ = AfterSuite(func(done Done) {
-	time.Sleep(500 * time.Second)
 	defer os.RemoveAll(dir)
 	defer close(done)
 	cancel()

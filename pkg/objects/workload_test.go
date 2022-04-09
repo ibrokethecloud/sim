@@ -14,6 +14,7 @@ const (
 	testIngressFilePath = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/extensions/v1beta1/ingresses.yaml"
 	testSettingsPath    = "../../samples/sampleSupportBundle/yamls/cluster/management.cattle.io/v3/settings.yaml"
 	testJobPath         = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/batch/v1/jobs.yaml"
+	nodePath            = "../../samples/sampleSupportBundle/yamls/cluster/v1/nodes.yaml"
 )
 
 // TestParseDaemonSet will verify a sample Daemonset
@@ -137,5 +138,55 @@ func TestVerifyJob(t *testing.T) {
 		if ok {
 			t.Fatalf("expect to find no labels but found labels %v", labels)
 		}
+	}
+}
+
+func TestVerifyNode(t *testing.T) {
+	objs, err := GenerateObjects(nodePath)
+	if err != nil {
+		t.Fatalf("error reading sample daemonset file %s %v", testDSFilePath, err)
+	}
+	for _, obj := range objs {
+		unstructObj, err := wranglerunstructured.ToUnstructured(obj)
+		if err != nil {
+			t.Log(unstructObj.Object["status"])
+			t.Fatal(err)
+		}
+
+		err = cleanupObjects(unstructObj.Object)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = objectHousekeeping(unstructObj)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		addresses, ok, err := unstructured.NestedFieldCopy(unstructObj.Object, "status", "addresses")
+		if err != nil {
+			t.Fatalf("error looking up addresses %v", err)
+		}
+
+		if !ok {
+			t.Fatalf("found no addresses in node")
+		}
+
+		addressList, ok := addresses.([]interface{})
+		if !ok {
+			t.Fatal("unable to assert addresses into []interface{}")
+		}
+
+		for _, addressInterface := range addressList {
+			address, ok := addressInterface.(map[string]interface{})
+			if !ok {
+				t.Fatal("unable to assert address into map[string]interface")
+			}
+			value, ok := address["address"]
+			if value.(string) != "localhost" {
+				t.Fatalf("expected address to be localhost but found %v", address)
+			}
+		}
+
 	}
 }

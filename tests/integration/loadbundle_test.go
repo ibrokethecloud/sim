@@ -1,10 +1,13 @@
 package integration
 
 import (
+	"fmt"
 	"github.com/ibrokethecloud/sim/pkg/objects"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 var _ = Describe("Process Support Bundle", func() {
@@ -47,6 +50,37 @@ var _ = Describe("Process Support Bundle", func() {
 				return nil
 			}, 5, 60).ShouldNot(HaveOccurred())
 
+		}
+	})
+
+	It("Verify Nodes", func() {
+		By("Verify node addresses are localhost")
+		{
+			Eventually(func() error {
+				kc, err := kubernetes.NewForConfig(a.Config)
+				if err != nil {
+					return err
+				}
+
+				nodes, err := kc.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return err
+				}
+
+				for _, node := range nodes.Items {
+					nodeObj, err := kc.CoreV1().Nodes().Get(ctx, node.GetName(), metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					for _, address := range nodeObj.Status.Addresses {
+						if address.Address != "localhost" {
+							return fmt.Errorf("expect addresses to be localhost but found %s for node %s", address.Address, nodeObj.GetName())
+						}
+					}
+				}
+				return nil
+			}, 5, 60).ShouldNot(HaveOccurred())
 		}
 	})
 })
