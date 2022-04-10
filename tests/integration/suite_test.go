@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"github.com/ibrokethecloud/sim/pkg/kubelet"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -19,10 +20,12 @@ import (
 )
 
 const (
-	timeout      = time.Second * 10
-	duration     = time.Second * 10
-	setupTimeout = 600
-	samplesPath  = "../../samples/sampleSupportBundle"
+	timeout       = time.Second * 10
+	duration      = time.Second * 10
+	setupTimeout  = 600
+	samplesPath   = "../../samples/sampleSupportBundle"
+	samplePodSpec = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/v1/pods.yaml"
+	namespaceSpec = "../../samples/sampleSupportBundle/yamls/cluster/v1/namespaces.yaml"
 )
 
 func TestSim(t *testing.T) {
@@ -38,11 +41,6 @@ var (
 	dir    string
 	eg     *errgroup.Group
 	egctx  context.Context
-)
-
-const (
-	samplePodSpec = "../../samples/sampleSupportBundle/yamls/namespaced/harvester-system/v1/pods.yaml"
-	namespaceSpec = "../../samples/sampleSupportBundle/yamls/cluster/v1/namespaces.yaml"
 )
 
 var _ = BeforeSuite(func(done Done) {
@@ -70,6 +68,12 @@ var _ = BeforeSuite(func(done Done) {
 
 	eg.Go(func() error {
 		return a.RunAPIServer(egctx)
+	})
+
+	// run fake kubelet
+	k := kubelet.NewKubeletSimulator(ctx, certificates, samplesPath)
+	eg.Go(func() error {
+		return k.RunFakeKubelet()
 	})
 
 	// wait for apiserver to start
