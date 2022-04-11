@@ -22,7 +22,6 @@ func TestGenerateNamespacedRuntimeObjects(t *testing.T) {
 		t.Fatalf("error processing non namespaced objects and pods from support bundle %v", err)
 	}
 
-	// TODO: A better test with the objects.
 	t.Logf("found %d namespaced non-pod objects", len(nonpodObjs))
 	t.Logf("found %d namespaced pod objects", len(podObjs))
 }

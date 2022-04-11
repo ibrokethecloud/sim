@@ -30,13 +30,18 @@ type KubeletSimulator struct {
 	bundlePath string
 }
 
-func NewKubeletSimulator(ctx context.Context, certs *certs.CertInfo, bundlePath string) *KubeletSimulator {
+func NewKubeletSimulator(ctx context.Context, certs *certs.CertInfo, bundlePath string) (*KubeletSimulator, error) {
 	// check bundle path exists
+
+	if certs == nil {
+		return nil, fmt.Errorf("no certificates provided for bootstrapping kubelet")
+	}
+
 	return &KubeletSimulator{
 		ctx:        ctx,
 		certs:      certs,
 		bundlePath: bundlePath,
-	}
+	}, nil
 }
 func (k *KubeletSimulator) RunFakeKubelet() error {
 	routes := http.NewServeMux()

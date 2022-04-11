@@ -71,7 +71,8 @@ var _ = BeforeSuite(func(done Done) {
 	})
 
 	// run fake kubelet
-	k := kubelet.NewKubeletSimulator(ctx, certificates, samplesPath)
+	k, err := kubelet.NewKubeletSimulator(ctx, certificates, samplesPath)
+	Expect(err).ToNot(HaveOccurred())
 	eg.Go(func() error {
 		return k.RunFakeKubelet()
 	})

@@ -58,8 +58,6 @@ func verifyTestWorkloads(t *testing.T, path string) {
 			t.Fatalf("error converting runtime object to unstructured object %v", err)
 		}
 
-		t.Log("object pre cleanup")
-		t.Logf("%v \n", unstructObj.Object)
 		err = cleanupObjects(unstructObj.Object)
 		if err != nil {
 			t.Fatalf("error cleaning up objects %v", err)

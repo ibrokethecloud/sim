@@ -74,7 +74,10 @@ func main() {
 
 	eg, egctx := errgroup.WithContext(ctx)
 
-	k := kubelet.NewKubeletSimulator(egctx, generatedCerts, bundlePath)
+	k, err := kubelet.NewKubeletSimulator(egctx, generatedCerts, bundlePath)
+	if err != nil {
+		logrus.Fatalf("error initialisting kubelet simulator: %v", err)
+	}
 
 	eg.Go(func() error {
 		return a.RunAPIServer(egctx)
