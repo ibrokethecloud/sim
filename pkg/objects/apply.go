@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"time"
 )
 
 type ObjectManager struct {
@@ -153,16 +154,18 @@ func (o *ObjectManager) ApplyObjects(objs []runtime.Object, patchStatus bool, sk
 			dr = o.dc.Resource(restMapping.Resource)
 		}
 
-		resp, err = dr.Create(o.ctx, unstructuredObj, metav1.CreateOptions{})
+		resp, err = dr.Get(o.ctx, unstructuredObj.GetName(), metav1.GetOptions{})
 		if err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				continue
+			if apierrors.IsNotFound(err) {
+				resp, err = dr.Create(o.ctx, unstructuredObj, metav1.CreateOptions{})
+				if err != nil {
+					logrus.Errorf("error during creation of resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
+					logrus.Error(unstructuredObj.Object)
+					return fmt.Errorf("error during creation of unstructured resource %v", err)
+				}
 			} else {
-				logrus.Errorf("error during creation of resource %s with gvr %s", unstructuredObj.GetName(), restMapping.Resource.String())
-				logrus.Error(unstructuredObj.Object)
-				return fmt.Errorf("error during creation of unstructured resource %v", err)
+				return fmt.Errorf("error looking up object before creating the same %v", err)
 			}
-
 		}
 
 		if patchStatus {
@@ -227,6 +230,10 @@ func objectHousekeeping(obj *unstructured.Unstructured) error {
 		err = apiServiceCleanup(obj)
 	case "Node":
 		err = nodeCleanup(obj)
+	case "LoadBalancer":
+		err = loadBalancerCleanup(obj)
+	case "BlockDevice":
+		err = blockDevicesCleanup(obj)
 	}
 	return err
 }
@@ -323,4 +330,19 @@ func (o *ObjectManager) FetchObject(obj runtime.Object) (*unstructured.Unstructu
 	}
 
 	return dr.Get(o.ctx, unstructObj.GetName(), metav1.GetOptions{})
+}
+
+// WaitForNamespaces ensures apiserver is ready and namespaces can be listed before it times out
+func (o *ObjectManager) WaitForNamespaces(timeout time.Duration) error {
+	now := time.Now()
+	for currtime := now; currtime.Before(now.Add(timeout)); {
+		// ignore errors
+		ns, _ := o.kc.CoreV1().Namespaces().List(o.ctx, metav1.ListOptions{})
+		if ns != nil && len(ns.Items) != 0 {
+			return nil
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	return fmt.Errorf("timed out waiting for apiserver to be ready")
 }

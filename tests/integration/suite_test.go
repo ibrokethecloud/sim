@@ -76,8 +76,6 @@ var _ = BeforeSuite(func(done Done) {
 		return k.RunFakeKubelet()
 	})
 
-	// wait for apiserver to start
-	time.Sleep(30 * time.Second)
 	eg.Go(func() error {
 		return eg.Wait()
 	})

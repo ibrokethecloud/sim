@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"time"
 )
 
 var _ = Describe("Process Support Bundle", func() {
@@ -16,7 +17,10 @@ var _ = Describe("Process Support Bundle", func() {
 	BeforeEach(func() {
 		Eventually(func() error {
 			o, err = objects.NewObjectManager(ctx, a.Config, samplesPath)
-			return err
+			if err != nil {
+				return err
+			}
+			return o.WaitForNamespaces(15 * time.Second)
 		}, 5, 60).ShouldNot(HaveOccurred())
 	})
 
